@@ -1,31 +1,46 @@
-name: Build Native PHP 7.4.5 Windows Binary
+name: Build Custom Thread-Safe PHP for Apache
 
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: # Allows you to trigger the build manually via the UI
+  workflow_dispatch: # Allows manual trigger via the GitHub Actions dashboard
 
 jobs:
   build:
-    runs-on: windows-2019 # Automatically provides the VC15 / VS2017 toolchain natively
+    runs-on: windows-2022 # Upgraded to modern Windows runner
 
     steps:
-    - name: Checkout Source Code
-      uses: actions/checkout@v4
+      - name: Checkout Your Custom Branch
+        uses: actions/checkout@v4
+        with:
+          ref: 'PHP-7.4-CVE-2026-109618-109619' # 👈 REPLACE this with your exact Git branch name
 
-    - name: Set up PHP SDK & Build Tools
-      run: |
-        # Use PowerShell to install the official headless Windows build modules
-        Install-Module -Name BuildPhp -Repository PSGallery -Force -AllowClobber
+      - name: Inject Legacy VS2017 VC15 Build Tools
+        shell: powershell
+        run: |
+          # Explicitly adds the required MSVC v141 build components to the windows-2022 image
+          $installer = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe"
+          if (Test-Path $installer) {
+              Write-Host "Installing VC15 compiler components..."
+              Start-Process $installer -ArgumentList "modify --id Microsoft.VisualStudio.Workload.MSBuild --add Microsoft.VisualStudio.Component.VC.v141.x86.x64 --quiet --norestart" -Wait
+          } else {
+              Write-Error "Visual Studio Installer path could not be found."
+          }
 
-    - name: Compile PHP 7.4.5 Binary
-      shell: powershell
-      run: |
-        # Triggers the headless compile using the cloud's pre-licensed compiler tools
-        Invoke-PhpBuild -Arch x64 -Ts ts
+      - name: Set up PHP SDK Framework
+        shell: powershell
+        run: |
+          # Installs the core headless builder utilities
+          Install-Module -Name BuildPhp -Repository PSGallery -Force -AllowClobber
 
-    - name: Upload Compiled Windows Binary
-      uses: actions/artifacts@v4
-      with:
-        name: php-7.4.5-windows-custom
-        path: artifacts/ # Grabs the resulting build folder containing your raw .exe
+      - name: Compile Thread-Safe PHP 7.4.x Binary
+        shell: powershell
+        run: |
+          # "-Ts ts" forces a Thread-Safe output required by Apache's mod_php
+          Invoke-PhpBuild -Arch x64 -Ts ts
+
+      - name: Upload Apache-Compatible Binary Zip
+        uses: actions/artifacts@v4
+        with:
+          name: php-7.4-custom-apache-x64
+          path: artifacts/
