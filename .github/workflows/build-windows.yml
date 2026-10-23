@@ -39,6 +39,30 @@ jobs:
           Write-Host "`nRepository contents:"
           Get-ChildItem
 
+      - name: Verify CVE patch commit exists
+        shell: pwsh
+        run: |
+          $PatchCommit = "712e60f9edfd03f0960fc4fc3c2c375f42b90aa2"
+
+          git cat-file -e "$PatchCommit^{commit}"
+
+          Write-Host "Patch commit found."
+
+          git merge-base --is-ancestor $PatchCommit HEAD
+
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "PATCH IS PRESENT IN HEAD"
+          }
+          else {
+            Write-Error "PATCH COMMIT IS NOT CONTAINED IN HEAD"
+            exit 1
+          }
+
+      - name: Verify patched source contents
+        shell: pwsh
+        run: |
+          git show 712e60f9edfd03f0960fc4fc3c2c375f42b90aa2
+
       - name: Inject Legacy VS2017 VC15 Build Tools
         shell: powershell
         run: |
